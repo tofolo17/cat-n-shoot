@@ -1,7 +1,7 @@
 import pygame as pg
 
 
-# Loading the map
+# Loading the map (each character of mapfile.txt is a tile; 0 = empty)
 def load_map(path):
     file = open(path + '.txt', 'r')
     data = file.read()
@@ -18,7 +18,6 @@ animation_frames = {}  # Animation frames
 
 # Checking the animations of the folders and placing them in lists.
 def load_animation(path, frame_durations):
-    global animation_frames
     animation_name = path.split('/')[-1]
     animation_frame_data = []
     n = 0
@@ -26,7 +25,7 @@ def load_animation(path, frame_durations):
         animation_frame_id = animation_name + '_' + str(n)
         img_loc = path + '/' + animation_frame_id + '.png'
         animation_image = pg.image.load(img_loc).convert()
-        animation_image.set_colorkey((0, 114, 188))
+        animation_image.set_colorkey((0, 114, 188))  # blue = transparent
         animation_frames[animation_frame_id] = animation_image.copy()
         for i in range(frame):
             animation_frame_data.append(animation_frame_id)
@@ -53,7 +52,12 @@ def collision_test(rect, tiles):
 
 # Detecting collisions and movement
 def move(rect, movement, tiles):
-    collision_types = {'top': False, 'bottom': False, 'right': False, 'left': False}
+    collision_types = {
+        'top': False,
+        'bottom': False,
+        'right': False,
+        'left': False,
+    }
     rect.x += int(movement[0])
     hit_list = collision_test(rect, tiles)
     for tile in hit_list:
@@ -90,6 +94,8 @@ def bg_moving(x_bg, bg_layer, h, window, w_width):
 
 
 # Do not let the screen move when the player collides with the wall.
+# (Undoes the parallax step; returns the new positions, since floats
+# are not changed in place.)
 def un_bug_collided_bg(x1, x2, x3, right, left):
     if right:
         x1 += 0.5
@@ -99,6 +105,7 @@ def un_bug_collided_bg(x1, x2, x3, right, left):
         x1 -= 0.5
         x2 -= 0.3
         x3 -= 0.15
+    return x1, x2, x3
 
 
 # Change the flame arrow image

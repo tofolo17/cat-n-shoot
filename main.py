@@ -1,20 +1,42 @@
+"""Cat-n-shoot: platform shooter controlled only by the mouse.
+
+Prototype for the One Button Game Jam (June 2020).
+"""
+
 import os
 import sys
 from random import randint, choice
 
+import pygame as pg
 from pygame import mixer
 
-from Functions import *
+from Functions import (
+    animation_frames,
+    bg_moving,
+    blit_arrow,
+    change_action,
+    change_img_conditional,
+    load_animation,
+    load_map,
+    move,
+    screen_text,
+    un_bug_collided_bg,
+)
+
+# Assets use relative paths: run from the script's folder
+os.chdir(os.path.dirname(os.path.abspath(__file__)))
 
 os.environ['SDL_VIDEO_CENTERED'] = '1'  # Centering
 
 pg.init()  # Starting Pygame
 
 # Size of the screen and title
-win_size = [900, 600]  # pg.display.Info().current_w - 5, pg.display.Info().current_h - 40
+win_size = [900, 600]
+# Fullscreen alternative:
+# pg.display.Info().current_w - 5, pg.display.Info().current_h - 40
 screen = pg.display.set_mode(size=win_size)
 pg.display.set_caption('Cat N Shoot')
-display = pg.Surface((600, 400))
+display = pg.Surface((600, 400))  # drawn small, then scaled up
 clock = pg.time.Clock()
 
 # Map variables
@@ -31,14 +53,21 @@ chimney = pg.image.load('Images/block_9.png')
 antenna = pg.image.load('Images/block_10.png')
 
 # Dictionary that stores information about animations
-animation_database = {'idle': load_animation('Animations/idle', [5, 5, 5, 5]),
-                      'run': load_animation('Animations/run', [5, 5, 5, 5, 5, 5, 5, 5]),
-                      'jump': load_animation('Animations/jump', [5, 5]),
-                      'shoot': load_animation('Animations/shoot', [5, 5, 5, 5]),
-                      'walkshoot': load_animation('Animations/walkshoot', [5, 5, 5, 5, 5, 5, 5, 5]),
-                      'jumpshoot': load_animation('Animations/jumpshoot', [5, 5, 5, 5]),
-                      'superjump': load_animation('Animations/superjump', [5, 5, 5, 5]),
-                      'superjumpshoot': load_animation('Animations/superjumpshoot', [5, 5, 5, 5])}
+# (each number is how many frames that image stays on screen)
+animation_database = {
+    'idle': load_animation('Animations/idle', [5, 5, 5, 5]),
+    'run': load_animation('Animations/run', [5, 5, 5, 5, 5, 5, 5, 5]),
+    'jump': load_animation('Animations/jump', [5, 5]),
+    'shoot': load_animation('Animations/shoot', [5, 5, 5, 5]),
+    'walkshoot': load_animation(
+        'Animations/walkshoot', [5, 5, 5, 5, 5, 5, 5, 5]
+    ),
+    'jumpshoot': load_animation('Animations/jumpshoot', [5, 5, 5, 5]),
+    'superjump': load_animation('Animations/superjump', [5, 5, 5, 5]),
+    'superjumpshoot': load_animation(
+        'Animations/superjumpshoot', [5, 5, 5, 5]
+    ),
+}
 
 
 # Main loop
@@ -62,8 +91,10 @@ def game_loop():
     landing_sound = mixer.Sound('Musics/landing.mp3')
 
     # Sound delimiters - Can be improved
-    replay_jump_sound = replay_super_jump_sound = replay_charger_sound = second_plus_rocket_use = False
-    ready_rocket_sound_delimiter = footstep_sound_delimiter = running_sound_limiter = 1
+    replay_jump_sound = replay_super_jump_sound = False
+    replay_charger_sound = second_plus_rocket_use = False
+    ready_rocket_sound_delimiter = footstep_sound_delimiter = 1
+    running_sound_limiter = 1
     landing_sound_delimiter = 0
 
     # Shooting variables
@@ -73,17 +104,18 @@ def game_loop():
     bullet_img = pg.image.load('Images/bullet.png')
 
     # Physics
-    vertical_momentum = air_timer = speed_timer = charge_timer = turbo_timer = dt = jump_timer = 0
+    vertical_momentum = air_timer = speed_timer = charge_timer = 0
+    turbo_timer = dt = jump_timer = 0
     permitted_vm = [0, 0.3, 0.6, 0.8999999999999999, 1.2, 1.5]
     stars_speed = 0.3
     time_to_use = 8
 
     # Opacity variables
-    right_arrow_opacity = left_arrow_opacity = upper_arrow_opacity = up_right_arrow_opacity = up_left_arrow_opacity \
-        = super_arrow_opacity = 70
+    right_arrow_opacity = left_arrow_opacity = upper_arrow_opacity = 70
+    up_right_arrow_opacity = up_left_arrow_opacity = super_arrow_opacity = 70
 
     # Arrow variables
-    arrow = pg.image.load('Images//seta.png').convert_alpha()
+    arrow = pg.image.load('Images/seta.png').convert_alpha()
     img_arrow_n = 5
 
     # Character variables
@@ -103,9 +135,17 @@ def game_loop():
         stars.append([randint(0, 600), randint(0, 140)])
 
     # Converting numbers of mapfile to blocks
-    def displaying_tile(block_name, w, h, n_block, corrector_x, corrector_y, collide=0):
+    def displaying_tile(
+        block_name, w, h, n_block, corrector_x, corrector_y, collide=0
+    ):
         if tile == f'{n_block}':
-            display.blit(block_name, (x * 16 + scroll[0] - corrector_x, y * 16 + scroll[1] + corrector_y))
+            display.blit(
+                block_name,
+                (
+                    x * 16 + scroll[0] - corrector_x,
+                    y * 16 + scroll[1] + corrector_y,
+                ),
+            )
             if not collide:
                 tile_rect.append(pg.Rect(x * 16, y * 16, w, h))
 
@@ -123,13 +163,24 @@ def game_loop():
         scroll[1] = int(true_scroll[1])
 
         # Movement of buildings
-        bg_moving(x_building3, buildings3, 140 + scroll[1] / 8, display, win_size[0])
-        bg_moving(x_building2, buildings2, 140 + scroll[1] / 6, display, win_size[0])
-        bg_moving(x_building1, buildings1, 165 + scroll[1] / 4, display, win_size[0])
+        bg_moving(
+            x_building3, buildings3, 140 + scroll[1] / 8, display, win_size[0]
+        )
+        bg_moving(
+            x_building2, buildings2, 140 + scroll[1] / 6, display, win_size[0]
+        )
+        bg_moving(
+            x_building1, buildings1, 165 + scroll[1] / 4, display, win_size[0]
+        )
 
         # Adding stars
         for star in stars:
-            pg.draw.line(display, (255, 255, 255), (star[0], star[1]), (star[0], star[1]))
+            pg.draw.line(
+                display,
+                (255, 255, 255),
+                (star[0], star[1]),
+                (star[0], star[1]),
+            )
             star[0] -= stars_speed
             if star[0] < 0:
                 star[0] = 600
@@ -193,7 +244,10 @@ def game_loop():
 
         # Motion-based animations - Can be optimized
         if moving_left or moving_right:
-            if footstep_sound_delimiter < 2 and vertical_momentum in permitted_vm:
+            if (
+                footstep_sound_delimiter < 2
+                and vertical_momentum in permitted_vm
+            ):
                 if speed_boost == 2:
                     footstep_sound.play(-1)
                     footstep_sound.set_volume(0.05)
@@ -203,39 +257,71 @@ def game_loop():
                 footstep_sound_delimiter = 1
             if shoot and time_to_recharge < 0:
                 if air_timer <= 5:
-                    player_action, player_frame = change_action(player_action, player_frame, 'walkshoot')
+                    player_action, player_frame = change_action(
+                        player_action, player_frame, 'walkshoot'
+                    )
             elif air_timer > 5:
                 if turbo_timer > 0.75 or turbo_timer == 0:
-                    player_action, player_frame = change_action(player_action, player_frame, 'jump')
+                    player_action, player_frame = change_action(
+                        player_action, player_frame, 'jump'
+                    )
                 else:
-                    player_action, player_frame = change_action(player_action, player_frame, 'superjump')
+                    player_action, player_frame = change_action(
+                        player_action, player_frame, 'superjump'
+                    )
             else:
-                player_action, player_frame = change_action(player_action, player_frame, 'run')
+                player_action, player_frame = change_action(
+                    player_action, player_frame, 'run'
+                )
         else:
             footstep_sound_delimiter = running_sound_limiter = 1
             running_sound.stop()
             footstep_sound.stop()
             if shoot and time_to_recharge < 0:
                 if air_timer <= 5:
-                    player_action, player_frame = change_action(player_action, player_frame, 'shoot')
+                    player_action, player_frame = change_action(
+                        player_action, player_frame, 'shoot'
+                    )
             elif air_timer > 5:
                 if turbo_timer > 0.75 or turbo_timer == 0:
-                    player_action, player_frame = change_action(player_action, player_frame, 'jump')
+                    player_action, player_frame = change_action(
+                        player_action, player_frame, 'jump'
+                    )
                 else:
-                    player_action, player_frame = change_action(player_action, player_frame, 'superjump')
+                    player_action, player_frame = change_action(
+                        player_action, player_frame, 'superjump'
+                    )
             else:
-                player_action, player_frame = change_action(player_action, player_frame, 'idle')
+                player_action, player_frame = change_action(
+                    player_action, player_frame, 'idle'
+                )
         if shoot and time_to_recharge < 0:
             if air_timer > 5:
-                if not super_jump_mode or turbo_timer > 0.75 or turbo_timer == 0:
-                    player_action, player_frame = change_action(player_action, player_frame, 'jumpshoot')
+                if (
+                    not super_jump_mode
+                    or turbo_timer > 0.75
+                    or turbo_timer == 0
+                ):
+                    player_action, player_frame = change_action(
+                        player_action, player_frame, 'jumpshoot'
+                    )
                 else:
-                    player_action, player_frame = change_action(player_action, player_frame, 'superjumpshoot')
+                    player_action, player_frame = change_action(
+                        player_action, player_frame, 'superjumpshoot'
+                    )
 
-        player_rect, collisions = move(player_rect, player_movement, tile_rect)  # Relating the player and the map
+        player_rect, collisions = move(
+            player_rect, player_movement, tile_rect
+        )  # Relating the player and the map
 
         # Do not let the screen move when the player collides with the wall.
-        un_bug_collided_bg(x_building1, x_building2, x_building3, collisions['right'], collisions['left'])
+        x_building1, x_building2, x_building3 = un_bug_collided_bg(
+            x_building1,
+            x_building2,
+            x_building3,
+            collisions['right'],
+            collisions['left'],
+        )
 
         # Keeps the character colliding with the floor
         if collisions['bottom']:
@@ -250,11 +336,18 @@ def game_loop():
             player_frame = 0
         player_img_id = animation_database[player_action][player_frame]
         player_img = animation_frames[player_img_id]
-        display.blit(pg.transform.flip(player_img, player_flip, False),
-                     (player_rect.x + scroll[0] + image_offset, player_rect.y + scroll[1]))
+        display.blit(
+            pg.transform.flip(player_img, player_flip, False),
+            (
+                player_rect.x + scroll[0] + image_offset,
+                player_rect.y + scroll[1],
+            ),
+        )
 
         # Adding arrows
-        rocket_arrow = pg.image.load(f'Images/superarrow_{img_arrow_n}.png').convert_alpha()
+        rocket_arrow = pg.image.load(
+            f'Images/superarrow_{img_arrow_n}.png'
+        ).convert_alpha()
         blit_arrow(50, 200, 180, left_arrow_opacity, arrow, display)
         blit_arrow(482, 70, 45, up_right_arrow_opacity, arrow, display)
         blit_arrow(50, 70, 135, up_left_arrow_opacity, arrow, display)
@@ -262,6 +355,9 @@ def game_loop():
         blit_arrow(492, 200, 0, right_arrow_opacity, arrow, display)
         blit_arrow(279, 300, 90, super_arrow_opacity, rocket_arrow, display)
 
+        # One-button controls: the mouse position on the screen decides
+        # the movement (right/left thirds walk, top band jumps, bottom
+        # fifth charges the rocket jump) and the click shoots.
         x, y = pg.mouse.get_pos()  # Getting mouse coordinates
         # X movement
         if x > (2 / 3 * win_size[0]) and (y > win_size[1] / 6):
@@ -274,8 +370,9 @@ def game_loop():
             left_arrow_opacity = 100
         else:
             moving_right = moving_left = False
-            right_arrow_opacity = left_arrow_opacity = upper_arrow_opacity = up_right_arrow_opacity = \
-                up_left_arrow_opacity = super_arrow_opacity = 70
+            right_arrow_opacity = left_arrow_opacity = 70
+            upper_arrow_opacity = up_right_arrow_opacity = 70
+            up_left_arrow_opacity = super_arrow_opacity = 70
 
         jump_timer += dt
         # Y movement
@@ -292,7 +389,8 @@ def game_loop():
                 collisions['top'] = True
                 replay_jump_sound = True
         elif collisions['bottom']:
-            upper_arrow_opacity = up_left_arrow_opacity = up_right_arrow_opacity = 70
+            upper_arrow_opacity = up_left_arrow_opacity = 70
+            up_right_arrow_opacity = 70
 
         # Super jump
         if y > 4 * win_size[1] / 5:
@@ -306,7 +404,8 @@ def game_loop():
                 player_rect.x += choice([-1.25, 1, -0.5, 0, 0.5, 1, 1.25])
             if charge_timer > 1:
                 rocket_charger_sound.stop()
-                super_jump_mode = replay_super_jump_sound = second_plus_rocket_use = True
+                super_jump_mode = replay_super_jump_sound = True
+                second_plus_rocket_use = True
                 vertical_momentum = -12
                 charge_timer = time_to_use = ready_rocket_sound_delimiter = 0
         else:
@@ -347,7 +446,9 @@ def game_loop():
             time_to_use = 8
             img_arrow_n = 5
         else:
-            img_arrow_n = change_img_conditional(time_to_use, [0, 2, 4, 6, 8], 1)
+            img_arrow_n = change_img_conditional(
+                time_to_use, [0, 2, 4, 6, 8], 1
+            )
             charge_timer = 0
 
         # Events
@@ -366,6 +467,7 @@ def game_loop():
 
         time_to_recharge -= dt  # Time to shoot
         # Bullets
+        # 15 shots per magazine, then 2 seconds to reload
         if shoot and time_to_recharge < 0:
             player_movement[0] = 100
             time_to_shoot += dt
@@ -396,15 +498,24 @@ def game_loop():
                 bullet[0] -= 15
                 x_start_shoot = 0
                 angle = 180
-            display.blit(pg.transform.rotate(bullet_img, angle),
-                         (bullet[0] + x_start_shoot + scroll[0], bullet[1] + 15 + scroll[1]))
-            if bullet[0] > player_rect.x + 300 + arrow.get_width() or \
-                    bullet[0] < player_rect.x - 300 - arrow.get_width():
+            display.blit(
+                pg.transform.rotate(bullet_img, angle),
+                (
+                    bullet[0] + x_start_shoot + scroll[0],
+                    bullet[1] + 15 + scroll[1],
+                ),
+            )
+            if (
+                bullet[0] > player_rect.x + 300 + arrow.get_width()
+                or bullet[0] < player_rect.x - 300 - arrow.get_width()
+            ):
                 bullets.remove(bullet)
                 shoot_pos.remove(shoot_pos[pos])
-        screen_text(f'{15 - n_of_bullets} / 15', 540, 370, (255, 255, 255), 20, display)
+        screen_text(
+            f'{15 - n_of_bullets} / 15', 540, 370, (255, 255, 255), 20, display
+        )
 
-        # Character's death
+        # Character's death (falling for about 2 seconds)
         if air_timer > 120:
             game_exit = True
 
@@ -415,6 +526,7 @@ def game_loop():
         dt = clock.tick(60) / 1000
 
 
-game_loop()
-pg.quit()
-sys.exit()
+if __name__ == '__main__':
+    game_loop()
+    pg.quit()
+    sys.exit()
